@@ -1,0 +1,99 @@
+/* Problem 10 : Explain about the aggregates of average revenue and expenditure for each ownership type of clubs(Fan-Owned, Private & State-Backed) :- 
+   - We create the first CTE named revenue_info where we retrieve the club_id and their corresponding total_revenue(SUM of all amount_euros_millions from all revenue streams) from the club_revenue table, grouping by club_id so that we get the aggregated total revenue for each individual club in the database.
+   - Similarly we create the second CTE named expenditure_info where we retrieve the club_id and their corresponding total_expenditure(SUM of all amount_euros_millions from all expenditure streams) from the club_expenditure table, grouping by club_id so that we get the aggregated total expenditure for each individual club in the database.
+   - In the main query we will retrieve the ownership_type from the club_dim table, and corresponding to each ownership_type category we will find the AVG of total_revenue(from revenue_info CTE) and AVG of total_expenditure(from expenditure_info CTE) of all clubs falling under that ownership_type category, for which we will INNER JOIN both the CTEs with club_dim table on the common column of club_id.
+   - We will use the GROUP BY clause on the basis of ownership_type from club_dim table, so that the AVG aggregations of total_revenue and total_expenditure get grouped and calculated ownership-type-wise, showing the average financial metrics for each club ownership category.
+   - Finally we will ORDER BY the result in descending order of avg_revenue and then in ascending order of avg_expenditure, so that the ownership types with the highest average revenue appear first, and in case of ties, those with the lowest average expenditure are shown first, giving us an insight into which ownership model generates the most revenue with efficient spending.
+*/
+WITH revenue_info AS ( -- This is our first CTE where we will retrieve the clubs(club_id) and their total_revenue(SUM of all the amount[cr.amount_euros_millions] of all revenue streams corresponging to each club_id when grouped on the basis of club_id) from the club_revenue table.
+SELECT
+    club_id,
+    SUM(amount_euros_millions) AS total_revenue_club
+FROM
+    club_revenue
+GROUP BY -- Grouping on the basis of the club_id, so that the aggregation of SUM(cr.amount_euros_millions) happens on the basis of each club, and shows the sum of all the amount of all revenue streams corresponding to each club_id.
+    club_id
+),
+expenditure_info AS ( -- This is our second CTE where we will retrieve expenditure info of the clubs from club_expenditure table, where we will retrieve the clubs(club_id) and their corresponding SUM of all the amount(ce.amount_euros_expenditure) spent in different expenditure streams corresponding that club_id in club_expenditure table, all while the result is grouped on the basis of club_id.
+SELECT
+    club_id,
+    SUM(amount_euros_millions) AS total_expenditure_club
+FROM
+    club_expenditure
+GROUP BY -- Grouped on the basis of club_id, so that the aggregated result of SUM(ce.amount_euros_millions) is aggregated for each expenditure streams corresponding to that club_id.
+    club_id
+)
+SELECT -- In the main query we will retrieve the info which the question asked combining the elements from all the CTE's mentioned above and club_dim... we will call out the ownership_type of clubs from club_dim corresponding to that we will find the AVG of total_revenue(from revenue_info CTE) & AVG of total_expenditure(from expenditure_info CTE) of all clubs lying in those ownership categories. For this we need to retrieve the ownership_type, total_revenue & total_expenditure we gotta INNER JOIN revenue_info CTE and expenditure_info CTE together on the common column of club_id which is common in all three tables/CTEs & since its an INNER JOIN it will only show those club_id values/clubs which are common in all three tables(so it means even if we mentioned cd.club_id, it will retreive the info common in all the three tables i.e common clubs in all three tables), which being all the clubs in the database since all clubs explained in club_dim are mentioned in club_revenue(used in ri CTE) and club_expenditure(used in ei CTE). All while GROUPING BY ownership_type from club_dim, so that the clubs and their total_revenues and total_expenditure gets grouped on the basis of which ownership_type their club belongs to.
+    ownership_type,
+    ROUND(AVG(total_revenue_club), 2) AS avg_revenue,
+    ROUND(AVG(total_expenditure_club), 2) AS avg_expenditure
+FROM -- Since the pivoting entity retrieved in this main query being ownership_type(which contains the info of what all categories of ownership each of the clubs in the database are divided into) is from the club_dim table... hence we mentioned the club_dim in FROM clause, we could do it the other way around too... so the ownership_type tels about which clubs in the database belong to which ownership_type, we can find their total_revenue(from ri CTE) & total_expenditure(from ei CTE) of each club belonging to each of the ownership_type categories and find the AVG of their total_revenue & total_expenditure for all the clubs belonging to their particular ownership_types categories(corresponding to them as it was in club_dim) as displayed in the main query which is grouped on the basis of ownershi_type categories.
+    club_dim AS cd
+JOIN -- Since we needed to find the AVG of total_revenue entity in the main query which exists in the revenue_info CTE we join it with the club_dim from where we retrieve the ownership_types.
+    revenue_info AS ri ON cd.club_id = ri.club_id
+JOIN -- Since we called out the AVG of total_expenditure which exists in club_expenditure CTE, so we INNER JOIN club_expenditure to club_dim from where we retrieved ownership_type categories(for which clubs belongs to these categories), which is inturn INNER JOINED to revenue_info(which retrieves the total_revenue of each clubs).
+    expenditure_info AS ei ON cd.club_id = ei.club_id
+GROUP BY -- GROUPING BY ownership_type(from club_dim), so that the clubs and their total_revenues(from ri CTE) and total_expenditure(from ei CTE) gets grouped on the basis of which ownership_type for which their club belongs to in the club_dim table, so that that for all the clubs belonging to each of the ownership_types in club_dim, their club's corresponding total_revenue's and total_expenditure's AVG be displayed corresponding to the ownership_types as displayed in main query.
+    ownership_type
+ORDER BY -- Finally ORDERING the result-set in descending order of avg_revenue, so that the ownership_types with the most avg_revenue be listed at the top and the lowest comes at bottom, and also arranging them in ascending order of the avg expenditure, since if two ownership_types have the same avg_revenue, then the ownership_type with the least avg_expenditure be listed before.
+    avg_revenue DESC,
+    avg_expenditure;
+
+/* Problem 11 : What are the total and average revenue across all domestic leagues represented in the dataset (Premier League, La Liga, Bundesliga, Serie A, Ligue 1) :- 
+   - We create the first CTE named revenue_info where we retrieve the club_id and their corresponding total_revenue(SUM of all amount_euros_millions from all revenue streams) from the club_revenue table, grouping by club_id so that we get the aggregated total revenue for each individual club represented in the UCL top 10 database.
+   - In the main query we will retrieve the league information from the club_dim table, and corresponding to each league category we will find three key metrics: league_total_revenue(SUM of total_revenue from revenue_info CTE of all clubs in that league), club_count_from_that_league_in_ucl(COUNT of all club_ids from revenue_info CTE belonging to that league), and avg_revenue_of_individual_club_from_league(league_total_revenue divided by club_count_from_that_league_in_ucl).
+   - We will INNER JOIN the revenue_info CTE with club_dim table on the common column of club_id so that we can retrieve the league information corresponding to each club's total revenue, allowing us to calculate league-wise aggregations.
+   - We will use the GROUP BY clause on the basis of league from club_dim table, so that all the aggregation calculations of SUM(total_revenue), COUNT(club_id), and AVG calculations get grouped and calculated league-wise for all the clubs of each domestic league represented in the top 10 UCL database.
+   - Finally we will ORDER BY the result in descending order first by league_total_revenue and then by avg_revenue_of_individual_club_from_league, so that the leagues with the highest combined revenue and highest average club revenue appear at the top, helping us understand which domestic leagues are financially strongest in the top 10 UCL clubs database.
+*/
+WITH revenue_info AS ( -- This is our First CTE which aims at retrieving the revenue information of all the clubs in UCL top 10 as mentioned in the database, where it will show the club_id and corresponding to it the SUM of total revenue amount(cr.amount_euros_millions) from all revenue streams of that club corresponding to its club_id, for which we will have to group it on the basis of club_id, so that the aggregation of total_revenue is taken into consideration for each clubs in cr table.
+SELECT
+    club_id,
+    SUM(amount_euros_millions) AS total_revenue_club
+FROM
+    club_revenue
+GROUP BY -- Grouping on the basis of the club_id, so that the aggregation of SUM(cr.amount_euros_millions) happens on the basis of each club, and shows the sum of all the amount of all revenue streams of that club corresponding to their club_id.
+    club_id
+)
+SELECT -- In the main query we will focus on retrieving the question based result which is league wise league_total_revenue & avg_revenue_of_individual_club_from_league for which we also will need the club_count_from_league, here we will retrieve the info on the basis of leagues mentioned in the club_dim table, along which we will retrieve the league_total_revenue(SUM of total_revenues of individual clubs from the previous ri CTE grouped on the basis of league[from cd table]), club_count_from_that_league_in_ucl(COUNT of all club_id from revenue_info CTE grouped on the basis of league[from cd table]) & avg_revenue_of_individual_club_from_league(SUM of total_revenues[from ri CTE] of individual clubs from that league included in this UCL top 10 database[basically league_total_revenue] divided by the COUNT of clubs from that domestic league ended up in the UCL top 10 databse[basically club_count_from_that_league_in_ucl] and group it all on the basis of league[from cd table]). To retrieve all this information from two different tables/CTEs, we will have to join the club_dim table(from where we retrieve the info of which club_id belongs to which  league) with revenue_info CTE(from where we retrieve the info of the total_revenue of each individual clubs for all their revenue streams combined together).
+    league,
+    ROUND(SUM(total_revenue_club), 2) AS league_total_revenue, -- Finds out the SUM of total_revenue of individual clubs from the revenue_info CTE grouped on the basis of league(from cd table) basically finding the total_revenue of all clubs in that league which are included in the UCL top 10 database. ROUND([formula], 2) is used to round the result to 2 decimal places.
+    COUNT(ri.club_id) AS club_count_from_that_league_in_ucl, -- Finds out the COUNT of all the club_id from the ri CTE which is grouped on the basis of league(from cd table), basically finding the count of all the clubs from that league which ended up in the database of top 10 UCL clubs. ROUND([formula], 2) is used to round the result to 2 decimal places.
+    ROUND((SUM(total_revenue_club) / COUNT(ri.club_id)), 2) AS avg_revenue_of_individual_club_from_league -- Finds the average revenue of the clubs of each domestic league whose clubs ended up in our database of top 10 UCL clubs, by dividing the previously found league_total_revenue(SUM of total_revenue of all clubs of the league in the top 10 club d.b) with the club_count_from_that_league_in_ucl(the COUNT of all the clubs of that league[whose total_revenue we summed up in the dividend/numerator] which ended up in the UCL top 10 d.b of ours).
+FROM -- Since we retrieve the pivotal entity of the main query of league from club_dim table, so we mentioned club_dim in the FROM clause, we could have gone otherways[and changed the JOIN callouts respectiveley] too but we chose this way for simplicity.
+    club_dim AS cd
+JOIN -- Since we called out the entities of league_total_revenue and also club_count_from_that_league_in_ucl which uses the entities of total_revenue and club_id from revenue_info table, we INNER JOINED the ri CTE with the cd table, so that the clubs whose total_revenue are shown in ri CTE, their correspondig leagueto which they belong to info also be known.
+    revenue_info as ri ON cd.club_id = ri.club_id
+GROUP BY -- GROUPING BY league so that all the aggregation used in the entities of league_total_revenue, club_count_from_that_league_in_ucl be done on the basis of different categories in the league column of club_dim table... i.e for all the club_id that a league holds their revenue info from the ri CTE can be used to find league_total_revenue, the count of all clubs from ri CTE can be used to find club_count_from_that_league_in_ucl & dividing both the league_total_revenue with the lub_count_from_that_league_in_ucl will give out the value of avg_revenue_of_individual_club_from_league.
+    league
+ORDER BY -- Finally we will arrange the result-set(keague and their corresponding league_total_revenue, club_count_from_that_league_in_ucl & avg_revenue_of_individual_club_from_league) in descending order(using DESC keyword) on the basis of their league_total_revenue, if in case two clubs had the same league_total_revenue, then the second ordering done in descending order of avg_revenue_of_individual_club_from_league will ensure the out of these two similar league_total_revenue teams the league with the most avg_revenue_of_individual_club_from_league will come out at the top/first.
+    league_total_revenue DESC,
+    avg_revenue_of_individual_club_from_league DESC;
+
+/* Problem 12 : Find the average revenue grouped by UCL stage reached (Round of 16 through Winner) & test whether financial scale correlates with sporting progress :- 
+   - We create the first CTE named revenue_info where we retrieve the club_id and their corresponding total_revenue(SUM of all amount_euros_millions from all revenue streams) from the club_revenue table, grouping by club_id so that we get the aggregated total revenue for each individual club in the top 10 UCL database.
+   - In the main query we will retrieve the ucl_stage_2024_25 information from the club_dim table, which tells us till which stage each club progressed in the 2024-25 UCL season (Round of 16, Quarter-Finals, Semi-Finals, Finals, Winner), and corresponding to each UCL stage we will calculate the AVG of total_revenue(from revenue_info CTE) of all clubs that reached that particular stage.
+   - We will INNER JOIN the revenue_info CTE with club_dim table on the common column of club_id so that we can retrieve the ucl_stage_2024_25 information corresponding to each club's total revenue, allowing us to group clubs by their UCL progress and calculate stage-wise financial averages.
+   - We will use the GROUP BY clause on the basis of ucl_stage_2024_25 from club_dim table, so that the AVG aggregation of total_revenue gets grouped and calculated stage-wise, showing us the average financial capacity of clubs at each level of UCL competition progression.
+   - Finally we will ORDER BY the result in descending order of avg_total_revenue_of_clubs_of_that_ucl_stage, so that the UCL stages with the highest average club revenues appear at the top, helping us analyze whether there is a positive correlation between financial scale and sporting progress in European club football (i.e whether clubs with higher revenues tend to progress further in the UCL).
+*/
+WITH revenue_info AS ( -- In the first CTE we will retrieve the information of revenue of each club where we find out the total_revenue(SUM of all the amount(cr.amount_euros_millions) of all revenue streams corresponding to that club_id when grouped on the basis of club_id) from the club_revenue table.
+SELECT
+    club_id,
+    SUM(amount_euros_millions) AS total_revenue
+FROM
+    club_revenue
+GROUP BY -- GROUPING  on the basis of club_id so that the aggregation here of SUM(cr.amount_euros_millions) is done w.r.t each club_id, summing up the amount_euros_millions of all revenue_streams corresponding to that club_id in club_revenue table.
+    club_id
+)
+SELECT -- In the Main query we will focus on getting the actual results of the question asked which was "what is the average ucl-stage-reached-wise revenue of clubs in the UCL top 10 database", for which we will call out ucl_stage_2024_25 from club_dim table, and corresponding to that we will use the aggregation of AVG(total_revenue) from the revenue_info CTE(which will basically find the AVG value of total_revenue of all clubs in that ucl_stage_2024_25 category) and group it on the basis of ucl_stage_2024_25 from club_dim table, so that the AVG of total_revenue of all clubs is done w.r.t the categories of ucl_stage_2024_25 in club_dim table. To retrieve this information we will have to join the club_dim table(from where we retrieve the info of which club_id belongs to which ucl_stage_2024_25) with revenue_info CTE(from where we retrieve the info of the total_revenue of each individual clubs for all their revenue streams combined together[which we use to find out the AVG total_revenue of all clubs in each ucl_stage_2024_25 category]). Since this is an INNER JOIN it will only include those club_id values/clubs which are common in both the tables/CTEs, which being all the clubs in the database since all clubs explained in club_dim are mentioned in club_revenue(used in ri CTE).
+    ucl_stage_2024_25,
+    ROUND(AVG(total_revenue), 2) AS avg_total_revenue_of_clubs_of_that_ucl_stage -- Finds out the AVG value of the total_revenue(of all individual clubs from the ri CTE) grouped on the basis of ucl_stage_2024_25(from cd table, giving info of which club belongs to which ucl_stage_2024_25 category), basically this will find out the average total revenue of a club who reached that particular UCL stage in 2024-25 season. 
+FROM -- Since the pivoting entity retrieved in this main query of ucl_stage_2024_25 is from club_dim table, so we mentioned club_dim in the FROM clause, we could have gone otherways[and changed the JOIN callouts respectiveley] too but we chose this way for simplicity.
+    club_dim AS cd
+JOIN -- INNER JOINED the revenue_info CTE(from where we retrieved the information of the total_revenues of clubs) with the club_dim table(from where we retrieved the information of which club belongs to which ucl_stage_2024_25 category) on the common column of club_id, so that we can find out the AVG of total_revenue of all clubs in each ucl_stage_2024_25 category.
+    revenue_info AS ri ON cd.club_id = ri.club_id
+GROUP BY -- GROUPED on the basis of ucl_stage_2024_25(from cd table), so that the AVG of total_revenue of all clubs is done w.r.t the categories of ucl_stage_2024_25.
+    ucl_stage_2024_25
+ORDER BY -- Finally we will arrange the result in descending order(using DESC keyword) of avg_total_revenue_of_clubs_of_that_ucl_stage, so that the UCL stage which has clubs holding revenues such that it gives their ucl_stage_2024_25 category the highest avg_total_revenue_of_clubs_of_that_ucl_stage be listed at the top and the lowest comes at bottom. 
+    avg_total_revenue_of_clubs_of_that_ucl_stage DESC;
